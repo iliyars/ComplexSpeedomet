@@ -1,5 +1,6 @@
 package com.example.xiaomi.complexspeedometr;
 
+import android.app.ProgressDialog;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
@@ -11,10 +12,12 @@ import android.content.pm.PackageManager;
 import android.support.annotation.Nullable;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
+import android.text.method.ScrollingMovementMethod;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.CompoundButton;
+import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ListView;
@@ -23,6 +26,7 @@ import android.widget.RelativeLayout;
 import android.widget.Switch;
 import android.widget.Toast;
 
+import java.io.BufferedInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -66,6 +70,9 @@ public class MainActivity extends AppCompatActivity implements
 
     private ConnectThread connectThread;
     private ConnectedThread connectedThread;
+    private EditText etConsole;
+    private ProgressDialog progressDialog;
+
 
 
     @Override
@@ -85,6 +92,7 @@ public class MainActivity extends AppCompatActivity implements
         btnDisconnect = findViewById(R.id.btn_disconnect);
         switchRedLed = findViewById(R.id.switch_led_red);
         switchGreenLed = findViewById(R.id.switch_led_green);
+        etConsole = findViewById(R.id.et_console);
 
 
 
@@ -95,6 +103,11 @@ public class MainActivity extends AppCompatActivity implements
         btnDisconnect.setOnClickListener(this);
         switchRedLed.setOnCheckedChangeListener(this);
         switchGreenLed.setOnCheckedChangeListener(this);
+
+        progressDialog = new ProgressDialog(this);
+        progressDialog.setCancelable(false);
+        progressDialog.setTitle("Соединение");
+        progressDialog.setMessage("Подождите");
 
 
         bluetoothDevices = new ArrayList<>();
@@ -121,16 +134,19 @@ public class MainActivity extends AppCompatActivity implements
     private void showFrameText() {
         frameText.setVisibility(View.VISIBLE);
         frameBtn.setVisibility(View.GONE);
+        frameLedControls.setVisibility(View.GONE);
     }
 
     private void showFrameBtn() {
         frameText.setVisibility(View.GONE);
         frameBtn.setVisibility(View.VISIBLE);
+        frameLedControls.setVisibility(View.GONE);
 
     }
     private void showFrameLed() {
         frameText.setVisibility(View.GONE);
         frameBtn.setVisibility(View.GONE);
+        frameLedControls.setVisibility(View.VISIBLE);
     }
 
     @Override
@@ -326,6 +342,8 @@ public class MainActivity extends AppCompatActivity implements
             try {
                 Method method = device.getClass().getMethod("createRfcommSocket", new Class[]{int.class});
                 bluetoothSocket = (BluetoothSocket) method.invoke(device, 1);
+
+                progressDialog.show();
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -336,12 +354,16 @@ public class MainActivity extends AppCompatActivity implements
             try {
                 bluetoothSocket.connect();
                 success = true;
+
+                progressDialog.dismiss();
             } catch (IOException e) {
                 e.printStackTrace();
 
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
+                        showFrameLed();
+                        progressDialog.dismiss();
                         Toast.makeText(MainActivity.this, "Не могу соединиться!",Toast.LENGTH_SHORT).show();
                     }
                 });
@@ -380,6 +402,8 @@ public class MainActivity extends AppCompatActivity implements
         private final InputStream inputStream;
         private final OutputStream outputStream;
 
+        private boolean isConnected = false;
+
         public ConnectedThread(BluetoothSocket bluetoothSocket) {
             InputStream inputStream = null;
             OutputStream outputStream = null;
@@ -393,11 +417,44 @@ public class MainActivity extends AppCompatActivity implements
 
             this.inputStream = inputStream;
             this.outputStream = outputStream;
+            isConnected = true;
         }
 
         @Override
         public void run() {
-//comment
+            BufferedInputStream bis = new BufferedInputStream(inputStream);
+            StringBuffer buffer = new StringBuffer();
+            final StringBuffer sbConsole = new StringBuffer();
+            final ScrollingMovementMethod movementMethod = new ScrollingMovementMethod();
+
+            while (isConnected){
+                try{
+                    int bytes = bis.read();
+                    buffer.append((char) bytes);
+                    int eof = buffer.indexOf("\r\n");
+                    if (eof > 0) {
+                        sbConsole.append(buffer.toString());
+                        buffer.delete(0, buffer.length());
+
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                etConsole.setText(sbConsole.toString());
+                                etConsole.setMovementMethod(movementMethod);
+
+                            }
+                        });
+                    }
+                }catch (IOException e) {
+                    e.printStackTrace();
+
+                }
+            }
+            try {
+                bis.close();
+            }catch (IOException e){
+                e.printStackTrace();
+            }
         }
 
         public void write(String command) {
@@ -414,6 +471,7 @@ public class MainActivity extends AppCompatActivity implements
 
         public void cancel() {
             try {
+                isConnected = false;
                 inputStream.close();
                 outputStream.close();
             }catch (IOException e) {

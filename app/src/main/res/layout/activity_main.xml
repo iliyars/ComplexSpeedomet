@@ -18,7 +18,7 @@
     <FrameLayout
         android:id="@+id/frame_text"
         android:layout_width="match_parent"
-        android:visibility="gone"
+        android:visibility="visible"
         android:layout_height="match_parent">
 
         <TextView
@@ -74,6 +74,17 @@
             android:layout_width="wrap_content"
             android:layout_centerHorizontal="true"
             android:layout_marginTop="10dp"
+            android:layout_height="wrap_content" />
+
+        <EditText
+            android:id="@+id/et_console"
+            android:layout_below="@+id/btn_disconnect"
+            android:layout_marginTop="8dp"
+            android:lines="4"
+            android:scrollbars="vertical"
+            android:editable="false"
+            android:gravity="bottom"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content" />
 
 
